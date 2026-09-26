@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import AppKit
 
 // The simulated field: a 2D grid of real-valued displacements, updated by
 // a semi-implicit (symplectic) Euler integration of the wave equation.
@@ -84,19 +85,20 @@ struct WaveField: Codable, Equatable {
         }
     }
 
-    // False-color stops for the -1...1 range: blue - cyan - white - yellow -
-    // red, evenly spaced, with white sitting right at 0 for maximum contrast
-    // against the saturated colors on either side. Interpolating through all
-    // three channels along this path gives well over a thousand
-    // distinguishable colors, not just the 256 steps a single grayscale
-    // channel could show.
+    // False-color stops for the -1...1 range: two independent linear
+    // interpolations, not one continuous blend -- blue to white for u in
+    // [-1,0], then white to red for u in [0,1]. White sits fixed at 0
+    // regardless of how either half is interpolated.
     static let colorStops: [(t: Double, r: Double, g: Double, b: Double)] = [
         (0.00,   0,   0, 255), // blue
-        (0.25,   0, 255, 255), // cyan
         (0.50, 255, 255, 255), // white
-        (0.75, 255, 255,   0), // yellow
         (1.00, 255,   0,   0), // red
     ]
+
+    // How far to pull every in-range color toward black, in HSB terms: 1.0
+    // leaves brightness untouched, 0.0 would make everything black. Hue and
+    // saturation are left alone, so this darkens without shifting color.
+    static let brightnessScale = 0.75
 
     // Values outside -1...1 use colors that never occur in the gradient
     // above, so they still stand out as clearly "out of range." White now
@@ -104,17 +106,28 @@ struct WaveField: Codable, Equatable {
     // every stop above keeps at least one channel pinned at 255, so pure
     // black (0,0,0) never occurs naturally in the gradient.
     static func colorFor(_ value: Double) -> (UInt8, UInt8, UInt8) {
-        if value > 1.0 { return (255, 0, 255) }   // magenta
-        if value < -1.0 { return (0, 0, 0) }      // black
+        if value > 1.0 { return (255, 0, 255) }   // magenta, at full brightness (alert color)
+        if value < -1.0 { return (0, 0, 0) }      // already black
         let t = (value + 1) / 2
         for i in 0..<(colorStops.count - 1) {
             let a = colorStops[i], b = colorStops[i + 1]
             guard t <= b.t else { continue }
             let frac = (t - a.t) / (b.t - a.t)
-            func lerp(_ x: Double, _ y: Double) -> UInt8 {
-                UInt8(max(0, min(255, x + frac * (y - x))).rounded())
+            func lerp(_ x: Double, _ y: Double) -> Double {
+                max(0, min(255, x + frac * (y - x)))
             }
-            return (lerp(a.r, b.r), lerp(a.g, b.g), lerp(a.b, b.b))
+            let base = NSColor(
+                red: lerp(a.r, b.r) / 255,
+                green: lerp(a.g, b.g) / 255,
+                blue: lerp(a.b, b.b) / 255,
+                alpha: 1
+            )
+            var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+            base.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+            let darker = NSColor(hue: hue, saturation: saturation, brightness: brightness * brightnessScale, alpha: 1)
+            var r: CGFloat = 0, g: CGFloat = 0, bch: CGFloat = 0, a2: CGFloat = 0
+            darker.getRed(&r, green: &g, blue: &bch, alpha: &a2)
+            return (UInt8((r * 255).rounded()), UInt8((g * 255).rounded()), UInt8((bch * 255).rounded()))
         }
         return (255, 0, 0)
     }
