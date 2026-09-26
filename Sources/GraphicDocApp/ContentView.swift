@@ -3,7 +3,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 enum Tool {
-    case arrow, blackDot, whiteDot
+    case arrow, negativeDot, positiveDot
 }
 
 struct ContentView: View {
@@ -17,7 +17,7 @@ struct ContentView: View {
     @State private var fpsSamplerTimer: Timer?
 
     private let pixelScale: CGFloat = 3
-    private let dotRadiusCells = 15
+    private let dotRadiusCells = 30
 
     private var displayWidth: CGFloat { CGFloat(field.width) * pixelScale }
     private var displayHeight: CGFloat { CGFloat(field.height) * pixelScale }
@@ -39,8 +39,8 @@ struct ContentView: View {
 
             HStack(spacing: 16) {
                 toolButton(.arrow, systemImage: "arrow.up.left")
-                toolButton(.blackDot)
-                toolButton(.whiteDot)
+                toolButton(.negativeDot)
+                toolButton(.positiveDot)
 
                 Spacer()
 
@@ -110,7 +110,7 @@ struct ContentView: View {
         let gridX = Int(location.x / pixelScale)
         let gridY = Int(location.y / pixelScale)
         guard gridX >= 0, gridX < field.width, gridY >= 0, gridY < field.height else { return }
-        let value = (selectedTool == .blackDot) ? -0.75 : 0.75
+        let value = (selectedTool == .negativeDot) ? -0.9 : 0.9
         field.paintDot(centerX: gridX, centerY: gridY, radius: dotRadiusCells, value: value)
     }
 
@@ -166,14 +166,13 @@ struct ContentView: View {
             Image(systemName: systemImage ?? "arrow.up.left")
                 .font(.system(size: 18))
                 .frame(width: 24, height: 24)
-        case .blackDot:
+        case .negativeDot:
             Circle()
-                .fill(Color.black)
+                .fill(Color.blue)
                 .frame(width: 18, height: 18)
-        case .whiteDot:
+        case .positiveDot:
             Circle()
-                .fill(Color.white)
-                .overlay(Circle().stroke(Color.blue, lineWidth: 2))
+                .fill(Color.red)
                 .frame(width: 18, height: 18)
         }
     }
@@ -182,11 +181,11 @@ struct ContentView: View {
         switch selectedTool {
         case .arrow:
             NSCursor.arrow.set()
-        case .blackDot:
-            Self.makeDotCursor(diameter: CGFloat(dotRadiusCells) * 2 * pixelScale, fill: .black, strokeColor: nil)
+        case .negativeDot:
+            Self.makeDotCursor(diameter: CGFloat(dotRadiusCells) * 2 * pixelScale, fill: .blue, strokeColor: nil)
                 .set()
-        case .whiteDot:
-            Self.makeDotCursor(diameter: CGFloat(dotRadiusCells) * 2 * pixelScale, fill: .white, strokeColor: .systemBlue)
+        case .positiveDot:
+            Self.makeDotCursor(diameter: CGFloat(dotRadiusCells) * 2 * pixelScale, fill: .red, strokeColor: nil)
                 .set()
         }
     }

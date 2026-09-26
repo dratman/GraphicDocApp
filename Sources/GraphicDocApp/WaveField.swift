@@ -18,7 +18,7 @@ struct WaveField: Codable, Equatable {
     var dudt: [Double]
 
     static let dt = 1.0
-    static let sc = 0.1
+    static let sc = 0.05
 
     init(width: Int = 175, height: Int = 175) {
         self.width = width
@@ -85,15 +85,26 @@ struct WaveField: Codable, Equatable {
         }
     }
 
-    // False-color stops for the -1...1 range: two independent linear
-    // interpolations, not one continuous blend -- blue to white for u in
-    // [-1,0], then white to red for u in [0,1]. White sits fixed at 0
-    // regardless of how either half is interpolated.
-    static let colorStops: [(t: Double, r: Double, g: Double, b: Double)] = [
-        (0.00,   0,   0, 255), // blue
-        (0.50, 255, 255, 255), // white
-        (1.00, 255,   0,   0), // red
-    ]
+    // Blue for negative, red for positive, white at 0 -- but the blend
+    // toward white as |u| shrinks is piecewise linear in two unequal
+    // segments rather than one straight line across the whole 0...1 range:
+    //   |u| in [breakpoint, 1]: color stays close to full blue/red,
+    //     dropping only from 1.0 to breakpointSaturation -- a slow falloff.
+    //   |u| in [0, breakpoint]: color falls the rest of the way to white
+    //     (0 saturation) over a much shorter span -- a fast falloff.
+    // So small ripples near 0 bleach out toward white quickly, while
+    // anything with real amplitude reads as strongly colored.
+    static let breakpoint = 0.25
+    static let breakpointSaturation = 0.85
+
+    private static func saturationFraction(forMagnitude magnitude: Double) -> Double {
+        if magnitude >= breakpoint {
+            let frac = (magnitude - breakpoint) / (1 - breakpoint)
+            return breakpointSaturation + frac * (1 - breakpointSaturation)
+        } else {
+            return magnitude / breakpoint * breakpointSaturation
+        }
+    }
 
     // How far to pull every in-range color toward black, in HSB terms: 1.0
     // leaves brightness untouched, 0.0 would make everything black. Hue and
@@ -101,35 +112,28 @@ struct WaveField: Codable, Equatable {
     static let brightnessScale = 0.75
 
     // Values outside -1...1 use colors that never occur in the gradient
-    // above, so they still stand out as clearly "out of range." White now
-    // sits at 0, so the old "<-1 = white" alert moved to black instead --
-    // every stop above keeps at least one channel pinned at 255, so pure
-    // black (0,0,0) never occurs naturally in the gradient.
+    // above, so they still stand out as clearly "out of range."
     static func colorFor(_ value: Double) -> (UInt8, UInt8, UInt8) {
         if value > 1.0 { return (255, 0, 255) }   // magenta, at full brightness (alert color)
-        if value < -1.0 { return (0, 0, 0) }      // already black
-        let t = (value + 1) / 2
-        for i in 0..<(colorStops.count - 1) {
-            let a = colorStops[i], b = colorStops[i + 1]
-            guard t <= b.t else { continue }
-            let frac = (t - a.t) / (b.t - a.t)
-            func lerp(_ x: Double, _ y: Double) -> Double {
-                max(0, min(255, x + frac * (y - x)))
-            }
-            let base = NSColor(
-                red: lerp(a.r, b.r) / 255,
-                green: lerp(a.g, b.g) / 255,
-                blue: lerp(a.b, b.b) / 255,
-                alpha: 1
-            )
-            var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
-            base.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-            let darker = NSColor(hue: hue, saturation: saturation, brightness: brightness * brightnessScale, alpha: 1)
-            var r: CGFloat = 0, g: CGFloat = 0, bch: CGFloat = 0, a2: CGFloat = 0
-            darker.getRed(&r, green: &g, blue: &bch, alpha: &a2)
-            return (UInt8((r * 255).rounded()), UInt8((g * 255).rounded()), UInt8((bch * 255).rounded()))
+        if value < -1.0 { return (0, 0, 0) }      // black
+        let magnitude = min(abs(value), 1.0)
+        let saturationFrac = saturationFraction(forMagnitude: magnitude)
+        let fullColor: (r: Double, g: Double, b: Double) = value >= 0 ? (255, 0, 0) : (0, 0, 255)
+        func blend(_ full: Double) -> Double {
+            255 + saturationFrac * (full - 255)
         }
-        return (255, 0, 0)
+        let base = NSColor(
+            red: blend(fullColor.r) / 255,
+            green: blend(fullColor.g) / 255,
+            blue: blend(fullColor.b) / 255,
+            alpha: 1
+        )
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        base.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+        let darker = NSColor(hue: hue, saturation: saturation, brightness: brightness * brightnessScale, alpha: 1)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        darker.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (UInt8((r * 255).rounded()), UInt8((g * 255).rounded()), UInt8((b * 255).rounded()))
     }
 
     // Renders the field to a small bitmap using the false-color scheme above.
