@@ -1,12 +1,13 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 enum Tool {
     case arrow, blackDot, whiteDot
 }
 
 struct ContentView: View {
-    @Binding var document: GraphicDocument
+    @State private var field = WaveField()
     @State private var isRunning = false
     @State private var selectedTool: Tool = .arrow
     @State private var isHoveringCanvas = false
@@ -15,8 +16,8 @@ struct ContentView: View {
     private let pixelScale: CGFloat = 3
     private let dotRadiusCells = 15
 
-    private var displayWidth: CGFloat { CGFloat(document.field.width) * pixelScale }
-    private var displayHeight: CGFloat { CGFloat(document.field.height) * pixelScale }
+    private var displayWidth: CGFloat { CGFloat(field.width) * pixelScale }
+    private var displayHeight: CGFloat { CGFloat(field.height) * pixelScale }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -40,8 +41,11 @@ struct ContentView: View {
 
                 Spacer()
 
+                Button("Open…") { openField() }
+                Button("Save As…") { saveField() }
+
                 Button("Clear") {
-                    document.field.clear()
+                    field.clear()
                 }
 
                 Button(isRunning ? "Stop" : "Run") {
@@ -55,7 +59,7 @@ struct ContentView: View {
         .onChange(of: isRunning) { _, running in
             if running {
                 simTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { _ in
-                    document.field.step()
+                    field.step()
                 }
             } else {
                 simTimer?.invalidate()
@@ -66,7 +70,7 @@ struct ContentView: View {
 
     private var canvasImage: some View {
         Group {
-            if let cgImage = document.field.makeCGImage() {
+            if let cgImage = field.makeCGImage() {
                 Image(decorative: cgImage, scale: 1.0)
                     .interpolation(.none)
                     .resizable()
@@ -87,9 +91,40 @@ struct ContentView: View {
     private func paint(at location: CGPoint) {
         let gridX = Int(location.x / pixelScale)
         let gridY = Int(location.y / pixelScale)
-        guard gridX >= 0, gridX < document.field.width, gridY >= 0, gridY < document.field.height else { return }
+        guard gridX >= 0, gridX < field.width, gridY >= 0, gridY < field.height else { return }
         let value = (selectedTool == .blackDot) ? -0.75 : 0.75
-        document.field.paintDot(centerX: gridX, centerY: gridY, radius: dotRadiusCells, value: value)
+        field.paintDot(centerX: gridX, centerY: gridY, radius: dotRadiusCells, value: value)
+    }
+
+    // Manual load/save via file panels, deliberately not SwiftUI's
+    // DocumentGroup: DocumentGroup's automatic "unsaved changes" review runs
+    // ahead of anything our app delegate can intercept, which is what was
+    // forcing the save prompt on every quit. With no NSDocument in the
+    // picture at all, there's nothing for that review to ask about.
+    private func openField() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try Data(contentsOf: url)
+            field = try JSONDecoder().decode(WaveField.self, from: data)
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
+
+    private func saveField() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "Untitled.json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try JSONEncoder().encode(field)
+            try data.write(to: url)
+        } catch {
+            NSAlert(error: error).runModal()
+        }
     }
 
     @ViewBuilder

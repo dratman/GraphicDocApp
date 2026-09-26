@@ -1,5 +1,4 @@
-import SwiftUI
-import UniformTypeIdentifiers
+import Foundation
 import CoreGraphics
 
 // The simulated field: a 2D grid of real-valued displacements, updated by
@@ -20,7 +19,7 @@ struct WaveField: Codable, Equatable {
     static let dt = 1.0
     static let sc = 0.2
 
-    init(width: Int = 150, height: Int = 150) {
+    init(width: Int = 175, height: Int = 175) {
         self.width = width
         self.height = height
         self.current = Array(repeating: 0.0, count: width * height)
@@ -85,21 +84,41 @@ struct WaveField: Codable, Equatable {
         }
     }
 
-    // Renders the field to a small bitmap: -1...1 maps linearly to
-    // black...white (0 is 50% gray), above 1 is red, below -1 is yellow.
+    // False-color stops for the -1...1 range: blue - cyan - green - yellow -
+    // red, evenly spaced. Interpolating through all three channels along
+    // this path gives well over a thousand distinguishable colors, not just
+    // the 256 steps a single grayscale channel could show.
+    static let colorStops: [(t: Double, r: Double, g: Double, b: Double)] = [
+        (0.00,   0,   0, 255), // blue
+        (0.25,   0, 255, 255), // cyan
+        (0.50,   0, 255,   0), // green
+        (0.75, 255, 255,   0), // yellow
+        (1.00, 255,   0,   0), // red
+    ]
+
+    // Values outside -1...1 use colors that never occur in the gradient
+    // above, so they still stand out as clearly "out of range."
+    static func colorFor(_ value: Double) -> (UInt8, UInt8, UInt8) {
+        if value > 1.0 { return (255, 0, 255) }   // magenta
+        if value < -1.0 { return (255, 255, 255) } // white
+        let t = (value + 1) / 2
+        for i in 0..<(colorStops.count - 1) {
+            let a = colorStops[i], b = colorStops[i + 1]
+            guard t <= b.t else { continue }
+            let frac = (t - a.t) / (b.t - a.t)
+            func lerp(_ x: Double, _ y: Double) -> UInt8 {
+                UInt8(max(0, min(255, x + frac * (y - x))).rounded())
+            }
+            return (lerp(a.r, b.r), lerp(a.g, b.g), lerp(a.b, b.b))
+        }
+        return (255, 0, 0)
+    }
+
+    // Renders the field to a small bitmap using the false-color scheme above.
     func makeCGImage() -> CGImage? {
         var pixels = [UInt8](repeating: 255, count: width * height * 4)
         for i in 0..<(width * height) {
-            let v = current[i]
-            let r: UInt8, g: UInt8, b: UInt8
-            if v > 1.0 {
-                (r, g, b) = (255, 0, 0)
-            } else if v < -1.0 {
-                (r, g, b) = (255, 255, 0)
-            } else {
-                let gray = UInt8((min(max(v, -1), 1) + 1) / 2 * 255)
-                (r, g, b) = (gray, gray, gray)
-            }
+            let (r, g, b) = Self.colorFor(current[i])
             pixels[i * 4] = r
             pixels[i * 4 + 1] = g
             pixels[i * 4 + 2] = b
@@ -119,27 +138,5 @@ struct WaveField: Codable, Equatable {
             shouldInterpolate: false,
             intent: .defaultIntent
         )
-    }
-}
-
-struct GraphicDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.json] }
-
-    var field: WaveField
-
-    init(field: WaveField = WaveField()) {
-        self.field = field
-    }
-
-    init(configuration: ReadConfiguration) throws {
-        guard let data = configuration.file.regularFileContents else {
-            throw CocoaError(.fileReadCorruptFile)
-        }
-        field = try JSONDecoder().decode(WaveField.self, from: data)
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        let data = try JSONEncoder().encode(field)
-        return FileWrapper(regularFileWithContents: data)
     }
 }
