@@ -12,7 +12,7 @@ struct ContentView: View {
     @State private var isHoveringCanvas = false
     @State private var simTimer: Timer?
 
-    private let pixelScale: CGFloat = 1
+    private let pixelScale: CGFloat = 5
     private let dotRadiusCells = 4
 
     private var displayWidth: CGFloat { CGFloat(document.field.width) * pixelScale }
