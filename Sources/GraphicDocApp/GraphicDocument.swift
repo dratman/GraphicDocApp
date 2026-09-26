@@ -25,7 +25,7 @@ struct WaveField: Codable, Equatable {
     // damping, and the field blows up instead of oscillating.
     static let waveSpeedSquared = 0.2
 
-    init(width: Int = 100, height: Int = 80) {
+    init(width: Int = 400, height: Int = 400) {
         self.width = width
         self.height = height
         self.current = Array(repeating: 0.0, count: width * height)
