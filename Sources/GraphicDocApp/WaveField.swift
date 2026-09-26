@@ -17,7 +17,7 @@ struct WaveField: Codable, Equatable {
     var dudt: [Double]
 
     static let dt = 1.0
-    static let sc = 0.2
+    static let sc = 0.1
 
     init(width: Int = 175, height: Int = 175) {
         self.width = width
@@ -84,23 +84,28 @@ struct WaveField: Codable, Equatable {
         }
     }
 
-    // False-color stops for the -1...1 range: blue - cyan - green - yellow -
-    // red, evenly spaced. Interpolating through all three channels along
-    // this path gives well over a thousand distinguishable colors, not just
-    // the 256 steps a single grayscale channel could show.
+    // False-color stops for the -1...1 range: blue - cyan - white - yellow -
+    // red, evenly spaced, with white sitting right at 0 for maximum contrast
+    // against the saturated colors on either side. Interpolating through all
+    // three channels along this path gives well over a thousand
+    // distinguishable colors, not just the 256 steps a single grayscale
+    // channel could show.
     static let colorStops: [(t: Double, r: Double, g: Double, b: Double)] = [
         (0.00,   0,   0, 255), // blue
         (0.25,   0, 255, 255), // cyan
-        (0.50,   0, 255,   0), // green
+        (0.50, 255, 255, 255), // white
         (0.75, 255, 255,   0), // yellow
         (1.00, 255,   0,   0), // red
     ]
 
     // Values outside -1...1 use colors that never occur in the gradient
-    // above, so they still stand out as clearly "out of range."
+    // above, so they still stand out as clearly "out of range." White now
+    // sits at 0, so the old "<-1 = white" alert moved to black instead --
+    // every stop above keeps at least one channel pinned at 255, so pure
+    // black (0,0,0) never occurs naturally in the gradient.
     static func colorFor(_ value: Double) -> (UInt8, UInt8, UInt8) {
         if value > 1.0 { return (255, 0, 255) }   // magenta
-        if value < -1.0 { return (255, 255, 255) } // white
+        if value < -1.0 { return (0, 0, 0) }      // black
         let t = (value + 1) / 2
         for i in 0..<(colorStops.count - 1) {
             let a = colorStops[i], b = colorStops[i + 1]

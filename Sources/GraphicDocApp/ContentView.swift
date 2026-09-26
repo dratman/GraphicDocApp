@@ -12,6 +12,9 @@ struct ContentView: View {
     @State private var selectedTool: Tool = .arrow
     @State private var isHoveringCanvas = false
     @State private var simTimer: Timer?
+    @State private var stepsThisSecond = 0
+    @State private var measuredStepsPerSecond = 0
+    @State private var fpsSamplerTimer: Timer?
 
     private let pixelScale: CGFloat = 3
     private let dotRadiusCells = 15
@@ -51,6 +54,10 @@ struct ContentView: View {
                 Button(isRunning ? "Stop" : "Run") {
                     isRunning.toggle()
                 }
+
+                Text("\(measuredStepsPerSecond) steps/sec")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal)
         }
@@ -60,10 +67,21 @@ struct ContentView: View {
             if running {
                 simTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { _ in
                     field.step()
+                    stepsThisSecond += 1
                 }
             } else {
                 simTimer?.invalidate()
                 simTimer = nil
+            }
+        }
+        .onAppear {
+            // Samples and resets the step counter once a second, independent
+            // of isRunning, so it reads 0 while stopped and the actual
+            // achieved rate (which can fall short of the 30/sec target under
+            // load) while running.
+            fpsSamplerTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                measuredStepsPerSecond = stepsThisSecond
+                stepsThisSecond = 0
             }
         }
     }
