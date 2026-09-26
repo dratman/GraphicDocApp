@@ -10,7 +10,8 @@ struct ContentView: View {
     @State private var field = WaveField()
     @State private var isRunning = false
     @State private var selectedTool: Tool = .arrow
-    @State private var isHoveringCanvas = false
+    @State private var hoverLocation: CGPoint?
+    @State private var isSystemCursorHidden = false
     @State private var simTimer: Timer?
     @State private var stepsThisSecond = 0
     @State private var measuredStepsPerSecond = 0
@@ -18,24 +19,37 @@ struct ContentView: View {
 
     private let pixelScale: CGFloat = 3
     private let dotRadiusCells = 30
+    private let peakDomeValue = 0.9
+
 
     private var displayWidth: CGFloat { CGFloat(field.width) * pixelScale }
     private var displayHeight: CGFloat { CGFloat(field.height) * pixelScale }
 
     var body: some View {
         VStack(spacing: 12) {
-            canvasImage
-                .frame(width: displayWidth, height: displayHeight)
-                .border(Color.gray)
-                .gesture(paintGesture)
-                .onHover { hovering in
-                    isHoveringCanvas = hovering
-                    if hovering {
-                        updateCursor()
-                    } else {
-                        NSCursor.arrow.set()
-                    }
+            ZStack {
+                canvasImage
+                brushPreview
+            }
+            .frame(width: displayWidth, height: displayHeight)
+            .clipped()
+            .border(Color.gray)
+            .gesture(paintGesture)
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location):
+                    hoverLocation = location
+                case .ended:
+                    hoverLocation = nil
                 }
+                updateSystemCursorVisibility()
+            }
+            .onDisappear {
+                if isSystemCursorHidden {
+                    NSCursor.unhide()
+                    isSystemCursorHidden = false
+                }
+            }
 
             HStack(spacing: 16) {
                 toolButton(.arrow, systemImage: "arrow.up.left")
@@ -60,6 +74,10 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal)
+
+            Text("Build: \(BuildInfo.timestamp)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding()
         .frame(minWidth: displayWidth + 40, minHeight: displayHeight + 120)
@@ -98,6 +116,37 @@ struct ContentView: View {
         }
     }
 
+    // Drawn as a normal SwiftUI view rather than a custom NSCursor -- a
+    // custom NSCursor image has a practical maximum size on macOS, and this
+    // brush (180pt across) is well past it: past that limit the system
+    // doesn't scale the image down, it just shows an unscaled corner of it,
+    // which is what was producing a quarter-disk instead of a full one no
+    // matter how the underlying bitmap's pixel/point math was adjusted. A
+    // plain view has no such limit and guarantees an exact size match with
+    // the real paint radius, since it's rendered by the same pipeline.
+    @ViewBuilder
+    private var brushPreview: some View {
+        if let hoverLocation, selectedTool != .arrow {
+            let diameter = CGFloat(dotRadiusCells) * 2 * pixelScale
+            Circle()
+                .fill(selectedTool == .negativeDot ? Color.blue : Color.red)
+                .frame(width: diameter, height: diameter)
+                .position(hoverLocation)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func updateSystemCursorVisibility() {
+        let shouldHide = selectedTool != .arrow && hoverLocation != nil
+        if shouldHide && !isSystemCursorHidden {
+            NSCursor.hide()
+            isSystemCursorHidden = true
+        } else if !shouldHide && isSystemCursorHidden {
+            NSCursor.unhide()
+            isSystemCursorHidden = false
+        }
+    }
+
     private var paintGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
@@ -110,7 +159,7 @@ struct ContentView: View {
         let gridX = Int(location.x / pixelScale)
         let gridY = Int(location.y / pixelScale)
         guard gridX >= 0, gridX < field.width, gridY >= 0, gridY < field.height else { return }
-        let value = (selectedTool == .negativeDot) ? -0.9 : 0.9
+        let value = (selectedTool == .negativeDot) ? -peakDomeValue : peakDomeValue
         field.paintDot(centerX: gridX, centerY: gridY, radius: dotRadiusCells, value: value)
     }
 
@@ -149,7 +198,7 @@ struct ContentView: View {
     private func toolButton(_ tool: Tool, systemImage: String? = nil) -> some View {
         Button {
             selectedTool = tool
-            if isHoveringCanvas { updateCursor() }
+            updateSystemCursorVisibility()
         } label: {
             toolIcon(tool, systemImage: systemImage)
                 .padding(6)
@@ -177,34 +226,4 @@ struct ContentView: View {
         }
     }
 
-    private func updateCursor() {
-        switch selectedTool {
-        case .arrow:
-            NSCursor.arrow.set()
-        case .negativeDot:
-            Self.makeDotCursor(diameter: CGFloat(dotRadiusCells) * 2 * pixelScale, fill: .blue, strokeColor: nil)
-                .set()
-        case .positiveDot:
-            Self.makeDotCursor(diameter: CGFloat(dotRadiusCells) * 2 * pixelScale, fill: .red, strokeColor: nil)
-                .set()
-        }
-    }
-
-    private static func makeDotCursor(diameter: CGFloat, fill: NSColor, strokeColor: NSColor?) -> NSCursor {
-        let strokeWidth: CGFloat = strokeColor == nil ? 0 : 2
-        let image = NSImage(size: NSSize(width: diameter, height: diameter))
-        image.lockFocus()
-        let inset = strokeWidth / 2
-        let rect = NSRect(x: inset, y: inset, width: diameter - strokeWidth, height: diameter - strokeWidth)
-        let path = NSBezierPath(ovalIn: rect)
-        fill.setFill()
-        path.fill()
-        if let strokeColor {
-            strokeColor.setStroke()
-            path.lineWidth = strokeWidth
-            path.stroke()
-        }
-        image.unlockFocus()
-        return NSCursor(image: image, hotSpot: NSPoint(x: diameter / 2, y: diameter / 2))
-    }
 }
