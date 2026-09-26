@@ -20,7 +20,7 @@ struct WaveField: Codable, Equatable {
     static let dt = 1.0
     static let sc = 0.2
 
-    init(width: Int = 200, height: Int = 200) {
+    init(width: Int = 150, height: Int = 150) {
         self.width = width
         self.height = height
         self.current = Array(repeating: 0.0, count: width * height)
@@ -28,6 +28,11 @@ struct WaveField: Codable, Equatable {
     }
 
     private func index(_ x: Int, _ y: Int) -> Int { y * width + x }
+
+    mutating func clear() {
+        current = Array(repeating: 0.0, count: width * height)
+        dudt = Array(repeating: 0.0, count: width * height)
+    }
 
     // Advances the whole field by one timestep. The outermost ring of
     // cells is never updated here, so it stays at 0 forever -- a fixed
@@ -56,13 +61,25 @@ struct WaveField: Codable, Equatable {
     mutating func paintDot(centerX: Int, centerY: Int, radius: Int, value: Double) {
         let minX = max(0, centerX - radius), maxX = min(width - 1, centerX + radius)
         let minY = max(0, centerY - radius), maxY = min(height - 1, centerY + radius)
-        guard minX <= maxX, minY <= maxY else { return }
+        guard minX <= maxX, minY <= maxY, radius > 0 else { return }
+        let radiusSquared = Double(radius * radius)
         for y in minY...maxY {
             for x in minX...maxX {
                 let dx = x - centerX, dy = y - centerY
-                guard dx * dx + dy * dy <= radius * radius else { continue }
+                let distanceSquared = Double(dx * dx + dy * dy)
+                guard distanceSquared <= radiusSquared else { continue }
+                // Dome profile: cos(t * pi/2), t = distance/radius, so u
+                // (treated as the z axis) reaches `value` at the center and
+                // tapers to 0 at the rim. Unlike a literal hemisphere
+                // (sqrt(1-t^2), which stays near its peak for most of the
+                // radius and only drops steeply right at the rim -- the same
+                // "limb darkening" effect you see in a photo of a sphere),
+                // this falls off gradually across the whole radius, so the
+                // gradient reads clearly as shading rather than a flat top.
+                let t = distanceSquared.squareRoot() / radiusSquared.squareRoot()
+                let heightFraction = cos(t * .pi / 2)
                 let i = index(x, y)
-                current[i] = value
+                current[i] = value * heightFraction
                 dudt[i] = 0
             }
         }

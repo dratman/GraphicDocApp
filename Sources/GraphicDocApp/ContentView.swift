@@ -12,8 +12,8 @@ struct ContentView: View {
     @State private var isHoveringCanvas = false
     @State private var simTimer: Timer?
 
-    private let pixelScale: CGFloat = 5
-    private let dotRadiusCells = 4
+    private let pixelScale: CGFloat = 3
+    private let dotRadiusCells = 15
 
     private var displayWidth: CGFloat { CGFloat(document.field.width) * pixelScale }
     private var displayHeight: CGFloat { CGFloat(document.field.height) * pixelScale }
@@ -39,6 +39,10 @@ struct ContentView: View {
                 toolButton(.whiteDot)
 
                 Spacer()
+
+                Button("Clear") {
+                    document.field.clear()
+                }
 
                 Button(isRunning ? "Stop" : "Run") {
                     isRunning.toggle()
