@@ -20,7 +20,7 @@ struct WaveField: Codable, Equatable {
     static let dt = 1.0
     static let sc = 0.05
 
-    init(width: Int = 175, height: Int = 175) {
+    init(width: Int = 245, height: Int = 245) {
         self.width = width
         self.height = height
         self.current = Array(repeating: 0.0, count: width * height)
