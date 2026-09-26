@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Binding var document: GraphicDocument
-    @State private var isPlaying = false
+    @State private var isRunning = false
 
     private let canvasWidth: CGFloat = 500
     private let canvasHeight: CGFloat = 400
@@ -22,18 +22,18 @@ struct ContentView: View {
                     ))
                     .frame(width: document.shape.radius * 2, height: document.shape.radius * 2)
                     .position(
-                        x: isPlaying ? document.shape.toX : document.shape.x,
-                        y: isPlaying ? document.shape.toY : document.shape.y
+                        x: isRunning ? document.shape.toX : document.shape.x,
+                        y: isRunning ? document.shape.toY : document.shape.y
                     )
                     .animation(
-                        isPlaying
+                        isRunning
                             ? .easeInOut(duration: 1.5).repeatForever(autoreverses: true)
                             : .default,
-                        value: isPlaying
+                        value: isRunning
                     )
                     .gesture(
                         DragGesture().onChanged { value in
-                            guard !isPlaying else { return }
+                            guard !isRunning else { return }
                             document.shape.x = value.location.x
                             document.shape.y = value.location.y
                         }
@@ -42,10 +42,10 @@ struct ContentView: View {
             .frame(width: canvasWidth, height: canvasHeight)
 
             HStack {
-                Button(isPlaying ? "Stop" : "Play") {
-                    isPlaying.toggle()
+                Button(isRunning ? "Stop" : "Run") {
+                    isRunning.toggle()
                 }
-                Text(isPlaying
+                Text(isRunning
                      ? "Animating between start and end position."
                      : "Drag the circle to set its start position.")
                     .font(.caption)
@@ -57,7 +57,7 @@ struct ContentView: View {
                 Slider(value: $document.shape.toX, in: 0...canvasWidth) { Text("X") }
                 Slider(value: $document.shape.toY, in: 0...canvasHeight) { Text("Y") }
             }
-            .disabled(isPlaying)
+            .disabled(isRunning)
             .padding(.horizontal)
         }
         .padding()
