@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "GraphicDocApp",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(name: "GraphicDocApp", path: "Sources/GraphicDocApp")
     ]
