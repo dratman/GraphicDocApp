@@ -17,7 +17,7 @@ struct ContentView: View {
     @State private var measuredStepsPerSecond = 0
     @State private var fpsSamplerTimer: Timer?
 
-    private let pixelScale: CGFloat = 3
+    private let pixelScale: CGFloat = 1
     private let dotRadiusCells = 30
     private let peakDomeValue = 0.9
 
