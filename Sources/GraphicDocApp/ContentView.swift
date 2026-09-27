@@ -26,72 +26,78 @@ struct ContentView: View {
     private var displayHeight: CGFloat { CGFloat(field.height) * pixelScale }
 
     var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                canvasImage
-                brushPreview
-            }
-            .frame(width: displayWidth, height: displayHeight)
-            .clipped()
-            .border(Color.gray)
-            .gesture(paintGesture)
-            .onContinuousHover { phase in
-                switch phase {
-                case .active(let location):
-                    hoverLocation = location
-                case .ended:
-                    hoverLocation = nil
+        ZStack {
+            VStack(spacing: 12) {
+                ZStack {
+                    canvasImage
+                    brushPreview
                 }
-                updateSystemCursorVisibility()
-            }
-            .onDisappear {
-                if isSystemCursorHidden {
-                    NSCursor.unhide()
-                    isSystemCursorHidden = false
+                .frame(width: displayWidth, height: displayHeight)
+                .clipped()
+                .border(Color.gray)
+                .gesture(paintGesture)
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active(let location):
+                        hoverLocation = location
+                    case .ended:
+                        hoverLocation = nil
+                    }
+                    updateSystemCursorVisibility()
                 }
-            }
-
-            HStack(spacing: 16) {
-                toolButton(.arrow, systemImage: "arrow.up.left")
-                toolButton(.negativeDot)
-                toolButton(.positiveDot)
-
-                Picker("", selection: $field.boundaryCondition) {
-                    ForEach(BoundaryCondition.allCases, id: \.self) { condition in
-                        Text(condition.rawValue).tag(condition)
+                .onDisappear {
+                    if isSystemCursorHidden {
+                        NSCursor.unhide()
+                        isSystemCursorHidden = false
                     }
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 200)
 
-                Spacer()
+                HStack(spacing: 16) {
+                    toolButton(.arrow, systemImage: "arrow.up.left")
+                    toolButton(.negativeDot)
+                    toolButton(.positiveDot)
 
-                Button("Open…") { openField() }
-                Button("Save As…") { saveField() }
+                    Picker("", selection: $field.boundaryCondition) {
+                        ForEach(BoundaryCondition.allCases, id: \.self) { condition in
+                            Text(condition.rawValue).tag(condition)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 200)
 
-                Button("Clear") {
-                    field.clear()
+                    Spacer()
+
+                    Button("Open…") { openField() }
+                    Button("Save As…") { saveField() }
+
+                    Button("Clear") {
+                        field.clear()
+                    }
+
+                    Button(isRunning ? "Stop" : "Run") {
+                        isRunning.toggle()
+                    }
+
+                    Text("\(measuredStepsPerSecond) steps/sec")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
-
-                Button(isRunning ? "Stop" : "Run") {
-                    isRunning.toggle()
-                }
-
-                Text("\(measuredStepsPerSecond) steps/sec")
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
+            .padding()
 
+            // Middle-right of the whole window, not just the toolbar row --
+            // an overlay on the outer ZStack rather than part of the VStack's
+            // own vertical flow.
             VStack(alignment: .trailing, spacing: 2) {
                 Text("Build: \(BuildInfo.timestamp)")
                 Text("Grid: \(field.width) x \(field.height)")
             }
             .font(.caption2)
             .foregroundStyle(.red)
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            .padding(.trailing, 8)
         }
-        .padding()
         .frame(minWidth: displayWidth + 40, minHeight: displayHeight + 120)
         .onChange(of: isRunning) { _, running in
             if running {
