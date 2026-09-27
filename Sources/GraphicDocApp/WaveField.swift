@@ -22,10 +22,10 @@ struct WaveField: Codable, Equatable {
     var dudt: [Double]
     var boundaryCondition: BoundaryCondition = .toroidal
 
-    static let dt = 1.0
+    static let dt = 2.0
     static let sc = 0.05
 
-    init(width: Int = 700, height: Int = 700) {
+    init(width: Int = 1000, height: Int = 800) {
         self.width = width
         self.height = height
         self.current = Array(repeating: 0.0, count: width * height)

@@ -83,15 +83,20 @@ struct ContentView: View {
             }
             .padding(.horizontal)
 
-            Text("Build: \(BuildInfo.timestamp)")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Build: \(BuildInfo.timestamp)")
+                Text("Grid: \(field.width) x \(field.height)")
+            }
+            .font(.caption2)
+            .foregroundStyle(.red)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding()
         .frame(minWidth: displayWidth + 40, minHeight: displayHeight + 120)
         .onChange(of: isRunning) { _, running in
             if running {
-                simTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { _ in
+                // TEMPORARY: uncapped, to see the actual max rate -- normally 1.0 / 30.0.
+                simTimer = Timer.scheduledTimer(withTimeInterval: 0.0, repeats: true) { _ in
                     field.step()
                     stepsThisSecond += 1
                 }
