@@ -20,6 +20,7 @@ struct ContentView: View {
     private let pixelScale: CGFloat = 1
     private let dotRadiusCells = 30
     private let peakDomeValue = 0.9
+    private let dampingOnValue = 0.001
 
 
     private var displayWidth: CGFloat { CGFloat(field.width) * pixelScale }
@@ -64,6 +65,11 @@ struct ContentView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 200)
+
+                    Toggle("Damping", isOn: Binding(
+                        get: { field.damping > 0 },
+                        set: { field.damping = $0 ? dampingOnValue : 0 }
+                    ))
 
                     Spacer()
 
