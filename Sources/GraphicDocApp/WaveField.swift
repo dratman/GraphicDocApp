@@ -5,11 +5,12 @@ import CoreGraphics
 // a semi-implicit (symplectic) Euler integration of the wave equation.
 // Instead of storing "current" and "previous" position grids, this stores
 // "current" (u) and its time derivative "dudt" (du/dt) directly, and
-// advances them in two steps each timestep:
+// advances them in three steps each timestep:
 //     dudt[x,y] += dt * (-sc) * (2nd space derivative of u[x,y])
+//     dudt[x,y] *= (1 - damping)
 //     u[x,y]    += dt * dudt[x,y]
-// The second line uses the just-updated dudt, not the old one -- that's
-// what makes this "semi-implicit" rather than plain Euler.
+// The last line uses the just-updated (and damped) dudt, not the old
+// one -- that's what makes this "semi-implicit" rather than plain Euler.
 enum BoundaryCondition: String, Codable, CaseIterable {
     case reflective = "Reflective"
     case toroidal = "Toroidal"
@@ -21,6 +22,7 @@ struct WaveField: Codable, Equatable {
     var current: [Double]
     var dudt: [Double]
     var boundaryCondition: BoundaryCondition = .toroidal
+    var damping = 0.001
 
     static let dt = 2.0
     static let sc = 0.05
@@ -42,6 +44,7 @@ struct WaveField: Codable, Equatable {
         current = try container.decode([Double].self, forKey: .current)
         dudt = try container.decode([Double].self, forKey: .dudt)
         boundaryCondition = try container.decodeIfPresent(BoundaryCondition.self, forKey: .boundaryCondition) ?? .toroidal
+        damping = try container.decodeIfPresent(Double.self, forKey: .damping) ?? 0.001
     }
 
     private func index(_ x: Int, _ y: Int) -> Int { y * width + x }
@@ -85,7 +88,13 @@ struct WaveField: Codable, Equatable {
                 let secondSpaceDerivative = 4 * current[i]
                     - current[index(xPlus, y)] - current[index(xMinus, y)]
                     - current[index(x, yPlus)] - current[index(x, yMinus)]
-                newDudt[i] = dudt[i] + Self.dt * (-Self.sc) * secondSpaceDerivative
+                // Damping: after the spring force updates dudt, shrink it by
+                // a factor of (1 - damping) before using it to move u. That
+                // slightly smaller dudt is also what's stored for next step,
+                // so velocity decays a little every timestep rather than
+                // ringing forever -- a lightly damped oscillator instead of
+                // an ideal, lossless one.
+                newDudt[i] = (dudt[i] + Self.dt * (-Self.sc) * secondSpaceDerivative) * (1 - damping)
                 newCurrent[i] = current[i] + Self.dt * newDudt[i]
             }
         }
@@ -133,7 +142,7 @@ struct WaveField: Codable, Equatable {
     //     (0 saturation) over a much shorter span -- a fast falloff.
     // So small ripples near 0 bleach out toward white quickly, while
     // anything with real amplitude reads as strongly colored.
-    static let breakpoint = 0.25
+    static let breakpoint = 0.1
     static let breakpointSaturation = 0.85
 
     private static func saturationFraction(forMagnitude magnitude: Double) -> Double {
@@ -148,7 +157,7 @@ struct WaveField: Codable, Equatable {
     // How far to pull every in-range color toward black, in HSB terms: 1.0
     // leaves brightness untouched, 0.0 would make everything black. Hue and
     // saturation are left alone, so this darkens without shifting color.
-    static let brightnessScale = 0.75
+    static let brightnessScale = 0.95
 
     // Values outside -1...1 use colors that never occur in the gradient
     // above, so they still stand out as clearly "out of range."
