@@ -11,11 +11,17 @@ import AppKit
 //     u[x,y]    += dt * dudt[x,y]
 // The second line uses the just-updated dudt, not the old one -- that's
 // what makes this "semi-implicit" rather than plain Euler.
+enum BoundaryCondition: String, Codable, CaseIterable {
+    case reflective = "Reflective"
+    case toroidal = "Toroidal"
+}
+
 struct WaveField: Codable, Equatable {
     var width: Int
     var height: Int
     var current: [Double]
     var dudt: [Double]
+    var boundaryCondition: BoundaryCondition = .toroidal
 
     static let dt = 1.0
     static let sc = 0.05
@@ -27,6 +33,18 @@ struct WaveField: Codable, Equatable {
         self.dudt = Array(repeating: 0.0, count: width * height)
     }
 
+    // A custom decoder so files saved before boundaryCondition existed
+    // (like earlier test saves) still load, defaulting to .toroidal for
+    // the missing field instead of failing to decode at all.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        width = try container.decode(Int.self, forKey: .width)
+        height = try container.decode(Int.self, forKey: .height)
+        current = try container.decode([Double].self, forKey: .current)
+        dudt = try container.decode([Double].self, forKey: .dudt)
+        boundaryCondition = try container.decodeIfPresent(BoundaryCondition.self, forKey: .boundaryCondition) ?? .toroidal
+    }
+
     private func index(_ x: Int, _ y: Int) -> Int { y * width + x }
 
     mutating func clear() {
@@ -34,18 +52,40 @@ struct WaveField: Codable, Equatable {
         dudt = Array(repeating: 0.0, count: width * height)
     }
 
-    // Advances the whole field by one timestep. The outermost ring of
-    // cells is never updated here, so it stays at 0 forever -- a fixed
-    // boundary that reflects waves back inward rather than absorbing them.
+    private func wrap(_ v: Int, _ bound: Int) -> Int { (v + bound) % bound }
+
+    // Advances the whole field by one timestep.
+    //
+    // .toroidal updates every cell, including the edges: a cell's neighbor
+    // "past" the right edge wraps around to the left edge (and similarly
+    // top/bottom), via the modulo arithmetic in `wrap`. That makes the
+    // topology a torus rather than a bounded sheet -- a wave that exits
+    // through the right edge reenters from the left, instead of reflecting
+    // back inward.
+    //
+    // .reflective updates only the interior cells (1..<width-1,
+    // 1..<height-1); the outermost ring is left untouched forever, acting
+    // as a fixed wall that waves bounce off of.
     mutating func step() {
         var newCurrent = current
         var newDudt = dudt
-        for y in 1..<(height - 1) {
-            for x in 1..<(width - 1) {
+        let xRange = boundaryCondition == .toroidal ? 0..<width : 1..<(width - 1)
+        let yRange = boundaryCondition == .toroidal ? 0..<height : 1..<(height - 1)
+        for y in yRange {
+            for x in xRange {
                 let i = index(x, y)
+                let xPlus: Int, xMinus: Int, yPlus: Int, yMinus: Int
+                switch boundaryCondition {
+                case .toroidal:
+                    xPlus = wrap(x + 1, width); xMinus = wrap(x - 1, width)
+                    yPlus = wrap(y + 1, height); yMinus = wrap(y - 1, height)
+                case .reflective:
+                    xPlus = x + 1; xMinus = x - 1
+                    yPlus = y + 1; yMinus = y - 1
+                }
                 let secondSpaceDerivative = 4 * current[i]
-                    - current[index(x + 1, y)] - current[index(x - 1, y)]
-                    - current[index(x, y + 1)] - current[index(x, y - 1)]
+                    - current[index(xPlus, y)] - current[index(xMinus, y)]
+                    - current[index(x, yPlus)] - current[index(x, yMinus)]
                 newDudt[i] = dudt[i] + Self.dt * (-Self.sc) * secondSpaceDerivative
                 newCurrent[i] = current[i] + Self.dt * newDudt[i]
             }

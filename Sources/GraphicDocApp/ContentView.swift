@@ -56,6 +56,14 @@ struct ContentView: View {
                 toolButton(.negativeDot)
                 toolButton(.positiveDot)
 
+                Picker("", selection: $field.boundaryCondition) {
+                    ForEach(BoundaryCondition.allCases, id: \.self) { condition in
+                        Text(condition.rawValue).tag(condition)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 200)
+
                 Spacer()
 
                 Button("Open…") { openField() }
