@@ -16,9 +16,10 @@ struct ContentView: View {
     @State private var stepsThisSecond = 0
     @State private var measuredStepsPerSecond = 0
     @State private var fpsSamplerTimer: Timer?
+    @State private var dotRadiusCells = 30
 
     private let pixelScale: CGFloat = 1
-    private let dotRadiusCells = 30
+    private let dotRadiusChoices = [5, 10, 20, 30]
     private let peakDomeValue = 0.9
     private let dampingOnValue = 0.001
 
@@ -57,6 +58,14 @@ struct ContentView: View {
                     toolButton(.arrow, systemImage: "arrow.up.left")
                     toolButton(.negativeDot)
                     toolButton(.positiveDot)
+
+                    Picker("Radius", selection: $dotRadiusCells) {
+                        ForEach(dotRadiusChoices, id: \.self) { radius in
+                            Text("\(radius)").tag(radius)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
 
                     Picker("", selection: $field.boundaryCondition) {
                         ForEach(BoundaryCondition.allCases, id: \.self) { condition in
