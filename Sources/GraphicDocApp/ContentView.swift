@@ -18,7 +18,9 @@ struct ContentView: View {
     @State private var fpsSamplerTimer: Timer?
     @State private var dotRadiusCells = 30
 
-    private let pixelScale: CGFloat = 1
+    // How many screen points each grid cell occupies. Recomputed from the
+    // window size so the whole grid always fits; the grid itself never changes.
+    @State private var pixelScale: CGFloat = 1
     private let dotRadiusChoices = [5, 10, 20, 30]
     private let peakDomeValue = 0.9
     private let dampingOnValue = 0.001
@@ -27,31 +29,44 @@ struct ContentView: View {
     private var displayWidth: CGFloat { CGFloat(field.width) * pixelScale }
     private var displayHeight: CGFloat { CGFloat(field.height) * pixelScale }
 
+    // The largest scale at which the whole grid fits in the given space,
+    // keeping the grid's aspect ratio.
+    private func fitScale(in size: CGSize) -> CGFloat {
+        guard field.width > 0, field.height > 0 else { return 1 }
+        return max(0.1, min(size.width / CGFloat(field.width), size.height / CGFloat(field.height)))
+    }
+
     var body: some View {
         ZStack {
             VStack(spacing: 12) {
-                ZStack {
-                    canvasImage
-                    brushPreview
-                }
-                .frame(width: displayWidth, height: displayHeight)
-                .clipped()
-                .border(Color.gray)
-                .gesture(paintGesture)
-                .onContinuousHover { phase in
-                    switch phase {
-                    case .active(let location):
-                        hoverLocation = location
-                    case .ended:
-                        hoverLocation = nil
+                GeometryReader { geo in
+                    let scale = fitScale(in: geo.size)
+                    ZStack {
+                        canvasImage
+                        brushPreview
                     }
-                    updateSystemCursorVisibility()
-                }
-                .onDisappear {
-                    if isSystemCursorHidden {
-                        NSCursor.unhide()
-                        isSystemCursorHidden = false
+                    .frame(width: CGFloat(field.width) * scale, height: CGFloat(field.height) * scale)
+                    .clipped()
+                    .border(Color.gray)
+                    .gesture(paintGesture)
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let location):
+                            hoverLocation = location
+                        case .ended:
+                            hoverLocation = nil
+                        }
+                        updateSystemCursorVisibility()
                     }
+                    .onDisappear {
+                        if isSystemCursorHidden {
+                            NSCursor.unhide()
+                            isSystemCursorHidden = false
+                        }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .onAppear { pixelScale = scale }
+                    .onChange(of: scale) { _, newScale in pixelScale = newScale }
                 }
 
                 HStack(spacing: 16) {
@@ -113,7 +128,10 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .padding(.trailing, 8)
         }
-        .frame(minWidth: displayWidth + 40, minHeight: displayHeight + 120)
+        // Resizable by dragging the window edges or the green button; the grid
+        // is scaled to fit. The ideal size is the grid at 1 point per cell.
+        .frame(minWidth: 900, idealWidth: CGFloat(field.width) + 40,
+               minHeight: 400, idealHeight: CGFloat(field.height) + 120)
         .onChange(of: isRunning) { _, running in
             if running {
                 // TEMPORARY: uncapped, to see the actual max rate -- normally 1.0 / 30.0.
