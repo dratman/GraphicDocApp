@@ -2,6 +2,11 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+extension Notification.Name {
+    static let openFieldRequested = Notification.Name("openFieldRequested")
+    static let saveFieldRequested = Notification.Name("saveFieldRequested")
+}
+
 enum Tool {
     case arrow, negativeDot, positiveDot
 }
@@ -97,9 +102,6 @@ struct ContentView: View {
 
                     Spacer()
 
-                    Button("Open…") { openField() }
-                    Button("Save As…") { saveField() }
-
                     Button("Clear") {
                         field.clear()
                     }
@@ -143,6 +145,14 @@ struct ContentView: View {
                 simTimer?.invalidate()
                 simTimer = nil
             }
+        }
+        // File > Open… and File > Save As… in the menu bar (defined in
+        // GraphicDocAppMain.swift) post these notifications.
+        .onReceive(NotificationCenter.default.publisher(for: .openFieldRequested)) { _ in
+            openField()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .saveFieldRequested)) { _ in
+            saveField()
         }
         .onAppear {
             // Samples and resets the step counter once a second, independent

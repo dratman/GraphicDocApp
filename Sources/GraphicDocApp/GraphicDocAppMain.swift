@@ -21,5 +21,20 @@ struct GraphicDocApp: App {
         WindowGroup {
             ContentView()
         }
+        // Replaces the default File > New items with Open and Save As,
+        // which tell ContentView what to do via notifications.
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("Open…") {
+                    NotificationCenter.default.post(name: .openFieldRequested, object: nil)
+                }
+                .keyboardShortcut("o", modifiers: .command)
+
+                Button("Save As…") {
+                    NotificationCenter.default.post(name: .saveFieldRequested, object: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+            }
+        }
     }
 }
