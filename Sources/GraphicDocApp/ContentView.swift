@@ -2,9 +2,16 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-extension Notification.Name {
-    static let openFieldRequested = Notification.Name("openFieldRequested")
-    static let saveFieldRequested = Notification.Name("saveFieldRequested")
+// Lets the File menu find the Save action of whichever window is in front.
+struct SaveFieldActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+extension FocusedValues {
+    var saveFieldAction: (() -> Void)? {
+        get { self[SaveFieldActionKey.self] }
+        set { self[SaveFieldActionKey.self] = newValue }
+    }
 }
 
 enum Tool {
@@ -12,6 +19,7 @@ enum Tool {
 }
 
 struct ContentView: View {
+    @EnvironmentObject private var appModel: AppModel
     @State private var field = WaveField()
     @State private var isRunning = false
     @State private var selectedTool: Tool = .arrow
@@ -146,15 +154,16 @@ struct ContentView: View {
                 simTimer = nil
             }
         }
-        // File > Open… and File > Save As… in the menu bar (defined in
-        // GraphicDocAppMain.swift) post these notifications.
-        .onReceive(NotificationCenter.default.publisher(for: .openFieldRequested)) { _ in
-            openField()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .saveFieldRequested)) { _ in
-            saveField()
+        // File > Save… / Save As… (GraphicDocAppMain.swift) call this action
+        // on the frontmost window only. Open and New always create a new
+        // window; that window picks up appModel.pendingField when it appears.
+        .focusedSceneValue(\.saveFieldAction, { saveField() })
+        .onDisappear {
+            simTimer?.invalidate()
+            fpsSamplerTimer?.invalidate()
         }
         .onAppear {
+            takePendingField()
             // Samples and resets the step counter once a second, independent
             // of isRunning, so it reads 0 while stopped and the actual
             // achieved rate (which can fall short of the 30/sec target under
@@ -225,24 +234,17 @@ struct ContentView: View {
         field.paintDot(centerX: gridX, centerY: gridY, radius: dotRadiusCells, value: value)
     }
 
+    private func takePendingField() {
+        guard let loaded = appModel.pendingField else { return }
+        field = loaded
+        appModel.pendingField = nil
+    }
+
     // Manual load/save via file panels, deliberately not SwiftUI's
     // DocumentGroup: DocumentGroup's automatic "unsaved changes" review runs
     // ahead of anything our app delegate can intercept, which is what was
     // forcing the save prompt on every quit. With no NSDocument in the
     // picture at all, there's nothing for that review to ask about.
-    private func openField() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let data = try Data(contentsOf: url)
-            field = try JSONDecoder().decode(WaveField.self, from: data)
-        } catch {
-            NSAlert(error: error).runModal()
-        }
-    }
-
     private func saveField() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
